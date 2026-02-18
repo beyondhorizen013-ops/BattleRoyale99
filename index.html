@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Battle Royale 99 - Alpha V2 Fixed</title>
+    <title>Battle Royale 99 - Alpha V2 Full</title>
     <style>
         body { margin: 0; background: #111; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         canvas { display: none; background: #2e7d32; cursor: crosshair; }
@@ -11,104 +11,147 @@
         #menu-container { 
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
             display: flex; flex-direction: column; justify-content: center; align-items: center;
-            background: #111; z-index: 100;
+            background: linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.8)), url('https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1470&auto=format&fit=crop');
+            background-size: cover; z-index: 100;
         }
-        .menu-box { background: rgba(0,0,0,0.8); padding: 50px; border-radius: 20px; border: 3px solid #00ccff; text-align: center; }
-        h1 { font-size: 50px; color: #00ccff; margin: 5px; }
-        .btn-play { padding: 20px 80px; font-size: 32px; font-weight: bold; color: white; background: #00ccff; border: none; border-radius: 50px; cursor: pointer; margin-bottom: 20px; }
-        .btn-yt { display: inline-block; padding: 12px 35px; font-size: 18px; color: white; background: #ff0000; text-decoration: none; border-radius: 5px; }
-        #ui { position: absolute; top: 10px; left: 10px; display: none; pointer-events: none; z-index: 10; }
-        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 200; }
+        .menu-box { background: rgba(0,0,0,0.9); padding: 40px; border-radius: 20px; border: 3px solid #00ccff; text-align: center; }
+        h1 { font-size: 50px; color: #00ccff; text-shadow: 0 0 15px #00ccff; margin: 10px; }
+        .btn-play { padding: 18px 70px; font-size: 28px; font-weight: bold; color: white; background: #00ccff; border: none; border-radius: 50px; cursor: pointer; transition: 0.3s; }
+        .btn-play:hover { transform: scale(1.1); background: #00ffee; }
+        .btn-yt { display: inline-block; margin-top: 20px; padding: 10px 25px; background: #ff0000; color: white; text-decoration: none; font-weight: bold; border-radius: 5px; }
+        
+        #ui { position: absolute; top: 10px; left: 10px; display: none; pointer-events: none; text-shadow: 2px 2px #000; }
+        #power-up { position: absolute; top: 20%; left: 50%; transform: translateX(-50%); font-size: 40px; color: #ff00ff; font-weight: bold; opacity: 0; transition: 1s; }
     </style>
 </head>
 <body>
 
     <div id="menu-container">
         <div class="menu-box">
+            <p style="letter-spacing: 5px; font-size: 12px;">BEYOND CHEESE PRESENTS</p>
             <h1>BATTLE ROYALE 99</h1>
+            <p style="color: #ff00ff; font-weight: bold;">SUPERPOWER UPDATE</p>
             <button class="btn-play" id="playBtn">PLAY</button><br>
-            <a href="https://www.youtube.com/@BeyondCheese" target="_blank" class="btn-yt">YOUTUBE</a>
-            <p>Thanks for playing!</p>
+            <a href="https://www.youtube.com/@BeyondCheese" target="_blank" class="btn-yt">YOUTUBE CHANNEL</a>
+            <p style="color: #666; margin-top: 15px;">Thanks for playing!</p>
         </div>
     </div>
 
     <div id="ui">
-        <h2 id="status">Alive: 100</h2>
-        <div id="hp-text">HP: 100</div>
+        <div id="timer" style="color: #00ff00; font-weight: bold; font-size: 20px;">NEXT SURGE: 05:00</div>
+        <h2 id="alive">Alive: 100</h2>
+        <div id="hp" style="font-size: 22px;">HP: 100</div>
+        <div id="weapon" style="color: #00ccff;">Weapon: Pistol</div>
+        <div id="power-text" style="color: #ff00ff;"></div>
     </div>
 
-    <div id="overlay">
-        <h1>GAME OVER</h1>
-        <button class="btn-play" onclick="location.reload()">RETRY</button>
-    </div>
-
+    <div id="power-up">POWER SURGE!</div>
     <canvas id="game"></canvas>
 
 <script>
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-const MAP_SIZE = 5000;
-let aliveCount = 100;
-let zoneRadius = 4500;
-let gameActive = false;
-let player = { x: 2500, y: 2500, hp: 100, weapon: 'Pistol' };
-let bots = [], bullets = [], snacks = [], keys = {};
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    
+    // Config
+    const MAP_SIZE = 5000;
+    let gameActive = false;
+    let aliveCount = 100;
+    let zoneRadius = 4500;
+    let startTime;
+    const weapons = { 'Pistol': 15, 'AR': 25, 'Shotgun': 60, 'Sniper': 120 };
 
-// Initialize World
-for (let i = 0; i < 99; i++) bots.push({ x: Math.random()*MAP_SIZE, y: Math.random()*MAP_SIZE, hp: 100, alive: true, vx: 2, vy: 2 });
-for (let i = 0; i < 40; i++) snacks.push({ x: Math.random()*MAP_SIZE, y: Math.random()*MAP_SIZE, active: true });
+    let player = { x: 2500, y: 2500, hp: 100, weapon: 'Pistol', power: null, lastShot: 0 };
+    let bots = [], bullets = [], chests = [], snacks = [], keys = {};
 
-function update() {
-    if (!gameActive) return;
+    // Build World
+    for(let i=0; i<99; i++) bots.push({ x: Math.random()*MAP_SIZE, y: Math.random()*MAP_SIZE, hp: 100, alive: true, vx: 2, vy: 2, weapon: 'Pistol', lastShot: 0 });
+    for(let i=0; i<50; i++) chests.push({ x: Math.random()*MAP_SIZE, y: Math.random()*MAP_SIZE, open: false });
+    for(let i=0; i<30; i++) snacks.push({ x: Math.random()*MAP_SIZE, y: Math.random()*MAP_SIZE, active: true });
 
-    if (keys['w']) player.y -= 5; if (keys['s']) player.y += 5;
-    if (keys['a']) player.x -= 5; if (keys['d']) player.x += 5;
+    window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+    window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
-    zoneRadius -= 0.2;
-    if (Math.hypot(player.x - 2500, player.y - 2500) > zoneRadius) player.hp -= 0.1;
+    document.getElementById('playBtn').onclick = function() {
+        document.getElementById('menu-container').style.display = 'none';
+        document.getElementById('ui').style.display = 'block';
+        canvas.style.display = 'block';
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        gameActive = true;
+        startTime = Date.now();
+        gameLoop();
+    };
 
-    snacks.forEach(s => {
-        if (s.active && Math.hypot(player.x - s.x, player.y - s.y) < 30) {
-            s.active = false; player.hp = Math.min(100, player.hp + 50);
+    function shoot(u, tx, ty) {
+        if(Date.now() - u.lastShot < 500) return;
+        let angle = Math.atan2(ty - u.y, tx - u.x);
+        bullets.push({ x: u.x, y: u.y, vx: Math.cos(angle)*15, vy: Math.sin(angle)*15, owner: u, dmg: u.power === 'One-Punch' ? 999 : weapons[u.weapon] });
+        u.lastShot = Date.now();
+    }
+
+    function gameLoop() {
+        if(!gameActive) return;
+
+        // Timer & Zone
+        let elapsed = Date.now() - startTime;
+        let remaining = Math.max(0, (5 * 60 * 1000) - (elapsed % (5 * 60 * 1000)));
+        let m = Math.floor(remaining/60000), s = Math.floor((remaining%60000)/1000);
+        document.getElementById('timer').innerText = `NEXT SURGE: ${m}:${s<10?'0':''}${s}`;
+        
+        if(remaining < 50) { 
+            player.power = ['One-Punch', 'Flight'][Math.floor(Math.random()*2)];
+            document.getElementById('power-up').style.opacity = 1;
+            document.getElementById('power-text').innerText = "POWER: " + player.power;
+            setTimeout(() => document.getElementById('power-up').style.opacity = 0, 3000);
         }
-    });
 
-    if (player.hp <= 0) { gameActive = false; document.getElementById('overlay').style.display = 'flex'; }
-}
+        zoneRadius -= 0.15;
+        if(Math.hypot(player.x-2500, player.y-2500) > zoneRadius) player.hp -= 0.1;
 
-function draw() {
-    if (!gameActive) return;
-    ctx.clearRect(0,0,canvas.width, canvas.height);
-    
-    const camX = canvas.width/2 - player.x;
-    const camY = canvas.height/2 - player.y;
-    ctx.save(); ctx.translate(camX, camY);
+        // Player Move
+        let speed = player.power === 'Flight' ? 12 : 6;
+        if(keys['w']) player.y -= speed; if(keys['s']) player.y += speed;
+        if(keys['a']) player.x -= speed; if(keys['d']) player.x += speed;
 
-    ctx.fillStyle = "#0f0"; snacks.forEach(s => { if(s.active) ctx.fillRect(s.x, s.y, 20, 20); });
-    ctx.fillStyle = "red"; bots.forEach(b => { if(b.alive) ctx.fillRect(b.x, b.y, 20, 20); });
-    ctx.strokeStyle = "white"; ctx.beginPath(); ctx.arc(2500, 2500, zoneRadius, 0, Math.PI*2); ctx.stroke();
-    ctx.restore();
+        // Chests & Snacks
+        chests.forEach(c => { if(!c.open && Math.hypot(player.x-c.x, player.y-c.y) < 40) { c.open = true; player.weapon = 'Sniper'; document.getElementById('weapon').innerText = "Weapon: Sniper"; } });
+        snacks.forEach(sn => { if(sn.active && Math.hypot(player.x-sn.x, player.y-sn.y) < 30) { sn.active = false; player.hp = Math.min(100, player.hp+40); } });
 
-    ctx.fillStyle = "#00ccff"; ctx.fillRect(canvas.width/2-10, canvas.height/2-10, 20, 20);
-    document.getElementById('hp-text').innerText = "HP: " + Math.ceil(player.hp);
-    
-    update();
-    requestAnimationFrame(draw);
-}
+        // Bots & Bullets
+        bots.forEach(b => {
+            if(!b.alive) return;
+            b.x += b.vx; b.y += b.vy;
+            if(b.x < 0 || b.x > 5000) b.vx *= -1; if(b.y < 0 || b.y > 5000) b.vy *= -1;
+            if(Math.hypot(b.x-player.x, b.y-player.y) < 400) shoot(b, player.x, player.y);
+        });
 
-window.onkeydown = (e) => keys[e.key.toLowerCase()] = true;
-window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
+        bullets.forEach((b, i) => {
+            b.x += b.vx; b.y += b.vy;
+            if(b.owner !== player && Math.hypot(b.x-player.x, b.y-player.y) < 20) { player.hp -= b.dmg; bullets.splice(i,1); }
+            bots.forEach(bot => { if(bot.alive && b.owner === player && Math.hypot(b.x-bot.x, b.y-bot.y) < 20) { bot.alive = false; aliveCount--; bullets.splice(i,1); } });
+        });
 
-// THE FIX: Direct listener on the button
-document.getElementById('playBtn').addEventListener('click', () => {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    document.getElementById('menu-container').style.display = 'none';
-    document.getElementById('ui').style.display = 'block';
-    canvas.style.display = 'block';
-    gameActive = true;
-    draw();
-});
+        // Draw
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        ctx.save(); ctx.translate(canvas.width/2-player.x, canvas.height/2-player.y);
+        ctx.strokeStyle = "red"; ctx.beginPath(); ctx.arc(2500, 2500, zoneRadius, 0, Math.PI*2); ctx.stroke();
+        ctx.fillStyle = "gold"; chests.forEach(c => { if(!c.open) ctx.fillRect(c.x, c.y, 30, 20); });
+        ctx.fillStyle = "#0f0"; snacks.forEach(s => { if(s.active) ctx.fillRect(s.x, s.y, 15, 15); });
+        ctx.fillStyle = "red"; bots.forEach(b => { if(b.alive) ctx.fillRect(b.x, b.y, 20, 20); });
+        ctx.fillStyle = "yellow"; bullets.forEach(bl => ctx.fillRect(bl.x, bl.y, 5, 5));
+        ctx.restore();
+
+        ctx.fillStyle = player.power ? "#f0f" : "#00ccff";
+        ctx.fillRect(canvas.width/2-10, canvas.height/2-10, 20, 20);
+
+        document.getElementById('hp').innerText = "HP: " + Math.ceil(player.hp);
+        document.getElementById('alive').innerText = "Alive: " + aliveCount;
+        if(player.hp <= 0) location.reload();
+        
+        requestAnimationFrame(gameLoop);
+    }
+
+    window.onmousedown = (e) => { if(gameActive) shoot(player, e.clientX - canvas.width/2 + player.x, e.clientY - canvas.height/2 + player.y); };
 </script>
 </body>
 </html>
