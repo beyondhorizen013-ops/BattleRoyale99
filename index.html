@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Battle Royale 99 - Hardcore V2 FIXED</title>
+    <title>Battle Royale 99 - Alpha V2</title>
     <style>
         body { margin: 0; background: #111; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         canvas { display: none; background: #2e7d32; cursor: crosshair; }
@@ -20,4 +20,180 @@
     <div id="menu">
         <div class="box">
             <p style="letter-spacing: 5px; font-size: 12px; color: #666;">BEYOND CHEESE PRESENTS</p>
-            <h1 style="font-size:
+            <h1 style="font-size: 50px; color: #00ccff; margin: 10px;">BATTLE ROYALE 99</h1>
+            <p style="color: #ff00ff; font-weight: bold; margin-bottom: 25px;">ALPHA V2: HARDCORE UPDATE</p>
+            <button class="btn-play" id="playBtn">START MATCH</button><br>
+            <a href="https://www.youtube.com/@BeyondCheese" target="_blank" style="color:red; text-decoration:none; display:inline-block; margin-top:15px; font-weight:bold;">YOUTUBE</a>
+        </div>
+    </div>
+
+    <div id="ui">
+        <div id="timer" style="color: #0f0; font-weight: bold; font-size: 22px;">ZONE ACTIVE</div>
+        <h2 id="alive">Players: 100</h2>
+        <h3 id="hp" style="color: #ff4444;">HP: 100</h3>
+        <div id="wep" style="color: #00ccff; font-weight: bold;">Weapon: Pistol</div>
+    </div>
+
+    <div id="kill-feed"></div>
+
+    <div id="game-over">
+        <h1 id="end-msg" style="color: red; font-size: 70px;">ELIMINATED</h1>
+        <button class="btn-play" onclick="location.reload()">RETRY</button>
+    </div>
+
+    <canvas id="game"></canvas>
+
+<script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    
+    let gameActive = false, aliveCount = 100, zoneRadius = 4500;
+    let player = { id: 'player', x: 2500, y: 2500, hp: 100, weapon: 'Pistol', lastShot: 0 };
+    let bots = [], bullets = [], chests = [], snacks = [], structures = [], keys = {};
+
+    const botNames = ["Ninja", "Buiga", "BeyondFan", "CheesePro", "SweatyWrap", "Defaulty", "Tfue-ish", "SniperKing", "ZoneRunner", "BushCamper"];
+
+    // 1. Grid Spawning to make the game last longer
+    for(let i=0; i<99; i++) {
+        bots.push({ 
+            id: i, 
+            name: botNames[Math.floor(Math.random()*botNames.length)] + " " + (i+1),
+            x: (i % 10) * 450 + 250 + (Math.random()*100), 
+            y: Math.floor(i / 10) * 450 + 250 + (Math.random()*100), 
+            hp: 150, alive: true, vx: (Math.random()-0.5)*3, vy: (Math.random()-0.5)*3, lastShot: 0 
+        });
+    }
+
+    for(let i=0; i<70; i++) structures.push({ x: Math.random()*4800, y: Math.random()*4800, w: 140, h: 140 });
+    for(let i=0; i<50; i++) chests.push({ x: Math.random()*5000, y: Math.random()*5000, open: false });
+    for(let i=0; i<40; i++) snacks.push({ x: Math.random()*5000, y: Math.random()*5000, active: true });
+
+    function addKill(msg) {
+        const feed = document.getElementById('kill-feed');
+        const entry = document.createElement('div');
+        entry.innerText = msg;
+        feed.prepend(entry);
+        setTimeout(() => entry.remove(), 4000);
+    }
+
+    document.getElementById('playBtn').onclick = () => {
+        document.getElementById('menu').style.display = 'none';
+        document.getElementById('ui').style.display = 'block';
+        canvas.style.display = 'block';
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        gameActive = true;
+        requestAnimationFrame(loop);
+    };
+
+    function shoot(u, tx, ty, isPlayer) {
+        const rate = isPlayer ? 400 : 1200;
+        if(Date.now() - u.lastShot < rate) return;
+        let ang = Math.atan2(ty - u.y, tx - u.x);
+        if(!isPlayer) ang += (Math.random() - 0.5) * 0.25; // Bots are less accurate
+        bullets.push({ x: u.x, y: u.y, vx: Math.cos(ang)*14, vy: Math.sin(ang)*14, ownerId: u.id, isPlayer: isPlayer });
+        u.lastShot = Date.now();
+    }
+
+    function loop() {
+        if(!gameActive) return;
+
+        let oldX = player.x, oldY = player.y;
+        if(keys['w']) player.y -= 5; if(keys['s']) player.y += 5;
+        if(keys['a']) player.x -= 5; if(keys['d']) player.x += 5;
+        
+        // Structure Collision
+        structures.forEach(s => { 
+            if(player.x+15 > s.x && player.x-15 < s.x+s.w && player.y+15 > s.y && player.y-15 < s.y+s.h) { 
+                player.x = oldX; player.y = oldY; 
+            } 
+        });
+
+        // Zone Logic
+        zoneRadius -= 0.07;
+        if(Math.hypot(player.x-2500, player.y-2500) > zoneRadius) player.hp -= 0.2;
+
+        // Bot AI (Fighting you and each other)
+        bots.forEach(b => {
+            if(!b.alive) return;
+            b.x += b.vx; b.y += b.vy;
+            if(Math.hypot(b.x-2500, b.y-2500) > zoneRadius) {
+                let ang = Math.atan2(2500-b.y, 2500-b.x);
+                b.vx = Math.cos(ang)*2; b.vy = Math.sin(ang)*2;
+            }
+            if(b.x<0||b.x>5000) b.vx*=-1; if(b.y<0||b.y>5000) b.vy*=-1;
+            
+            // Check for player nearby
+            if(Math.hypot(b.x-player.x, b.y-player.y) < 400) shoot(b, player.x, player.y, false);
+            else {
+                // Check for other bots nearby
+                let target = bots.find(o => o.alive && o.id !== b.id && Math.hypot(b.x-o.x, b.y-o.y) < 300);
+                if(target) shoot(b, target.x, target.y, false);
+            }
+        });
+
+        // Bullet Logic
+        for(let i=bullets.length-1; i>=0; i--) {
+            let b = bullets[i];
+            b.x += b.vx; b.y += b.vy;
+            
+            if(b.isPlayer) {
+                bots.forEach(bot => { 
+                    if(bot.alive && Math.hypot(b.x-bot.x, b.y-bot.y)<25) { 
+                        bot.hp -= 50; 
+                        if(bot.hp <= 0){bot.alive=false; aliveCount--; addKill("YOU ELIMINATED " + bot.name);} 
+                        bullets.splice(i,1); 
+                    } 
+                });
+            } else {
+                if(Math.hypot(b.x-player.x, b.y-player.y)<20) { 
+                    player.hp -= 15; bullets.splice(i,1); 
+                }
+                bots.forEach(bot => { 
+                    if(bot.alive && bot.id !== b.ownerId && Math.hypot(b.x-bot.x, b.y-bot.y)<25) { 
+                        bot.hp -= 50; 
+                        if(bot.hp <= 0){bot.alive=false; aliveCount--; addKill(bot.name + " WAS ELIMINATED");} 
+                        bullets.splice(i,1); 
+                    } 
+                });
+            }
+        }
+
+        // Loot
+        chests.forEach(c => { if(!c.open && Math.hypot(player.x-c.x, player.y-c.y)<40){c.open=true; player.weapon='Sniper'; document.getElementById('wep').innerText='Weapon: Sniper'; addKill("LOOTED SNIPER");}});
+        snacks.forEach(s => { if(s.active && Math.hypot(player.x-s.x, player.y-s.y)<30){s.active=false; player.hp=Math.min(100, player.hp+30);}});
+
+        // Draw Everything
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        ctx.save(); ctx.translate(canvas.width/2-player.x, canvas.height/2-player.y);
+        ctx.strokeStyle="red"; ctx.lineWidth=8; ctx.beginPath(); ctx.arc(2500, 2500, zoneRadius, 0, Math.PI*2); ctx.stroke();
+        ctx.fillStyle="#333"; structures.forEach(s => ctx.fillRect(s.x, s.y, s.w, s.h));
+        ctx.fillStyle="gold"; chests.forEach(c => { if(!c.open) ctx.fillRect(c.x, c.y, 30, 20); });
+        ctx.fillStyle="#0f0"; snacks.forEach(s => { if(s.active) ctx.fillRect(s.x, s.y, 15, 15); });
+        ctx.fillStyle="red"; bots.forEach(b => { if(b.alive) ctx.fillRect(b.x-10, b.y-10, 20, 20); });
+        ctx.fillStyle="yellow"; bullets.forEach(bul => ctx.fillRect(bul.x, bul.y, 5, 5));
+        ctx.restore();
+
+        ctx.fillStyle="#00ccff"; ctx.fillRect(canvas.width/2-10, canvas.height/2-10, 20, 20);
+        document.getElementById('hp').innerText = "HP: " + Math.max(0, Math.ceil(player.hp));
+        document.getElementById('alive').innerText = "Players: " + aliveCount;
+
+        if(player.hp <= 0) { 
+            gameActive=false; 
+            document.getElementById('game-over').style.display='flex'; 
+        } else if(aliveCount <= 1) { 
+            gameActive=false; 
+            document.getElementById('game-over').style.display='flex'; 
+            document.getElementById('end-msg').innerText="VICTORY ROYALE!"; 
+            document.getElementById('end-msg').style.color="#00ccff"; 
+        } else {
+            requestAnimationFrame(loop);
+        }
+    }
+
+    window.onkeydown=(e)=>keys[e.key.toLowerCase()]=true;
+    window.onkeyup=(e)=>keys[e.key.toLowerCase()]=false;
+    window.onmousedown=(e)=> { if(gameActive) shoot(player, e.clientX-canvas.width/2+player.x, e.clientY-canvas.height/2+player.y, true); };
+</script>
+</body>
+</html>
