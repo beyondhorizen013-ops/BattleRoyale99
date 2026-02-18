@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mini Battle Royale</title>
+    <style>
+        body { margin: 0; background: #111; color: white; font-family: sans-serif; overflow: hidden; }
+        canvas { display: block; margin: 0 auto; background: #2e7d32; cursor: crosshair; }
+        #ui { position: absolute; top: 10; left: 10; pointer-events: none; text-shadow: 2px 2px 2px #000; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h2 id="status">Players Alive: 100</h2>
+        <p id="hp">HP: 100</p>
+        <p id="weapon">Weapon: Fists</p>
+    </div>
+    <canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const statusText = document.getElementById('status');
+const hpText = document.getElementById('hp');
+const weaponText = document.getElementById('weapon');
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// Game Settings
+const MAP_SIZE = 3000;
+let aliveCount = 100;
+let zoneRadius = 2000;
+let gameActive = true;
+
+const player = {
+    x: MAP_SIZE / 2,
+    y: MAP_SIZE / 2,
+    hp: 100,
+    speed: 5,
+    size: 20,
+    color: '#00ccff',
+    damage: 10,
+    weapon: 'Fists'
+};
+
+const bots = [];
+const chests = [];
+const bullets = [];
+const keys = {};
+
+// Initialization
+for (let i = 0; i < 99; i++) {
+    bots.push({
+        x: Math.random() * MAP_SIZE,
+        y: Math.random() * MAP_SIZE,
+        hp: 100,
+        size: 20,
+        alive: true,
+        vx: (Math.random() - 0.5) * 4,
+        vy: (Math.random() - 0.5) * 4,
+        lastShot: 0
+    });
+}
+
+for (let i = 0; i < 30; i++) {
+    chests.push({
+        x: Math.random() * MAP_SIZE,
+        y: Math.random() * MAP_SIZE,
+        size: 30,
+        opened: false
+    });
+}
+
+// Input Handling
+window.onkeydown = (e) => keys[e.key.toLowerCase()] = true;
+window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
+window.onmousedown = (e) => shoot(player, e.clientX, e.clientY, true);
+
+function shoot(who, targetX, targetY, isPlayer) {
+    const angle = isPlayer 
+        ? Math.atan2(targetY - canvas.height/2, targetX - canvas.width/2)
+        : Math.atan2(targetY - who.y, targetX - who.x);
+    
+    bullets.push({
+        x: who.x,
+        y: who.y,
+        vx: Math.cos(angle) * 10,
+        vy: Math.sin(angle) * 10,
+        owner: who,
+        damage: who.damage || 10
+    });
+}
+
+function update() {
+    if (!gameActive) return;
+
+    // Player Movement
+    if (keys['w']) player.y -= player.speed;
+    if (keys['s']) player.y += player.speed;
+    if (keys['a']) player.x -= player.speed;
+    if (keys['d']) player.x += player.speed;
+
+    // Zone Shrinking
+    zoneRadius -= 0.2;
+    const distToCenter = Math.hypot(player.x - MAP_SIZE/2, player.y - MAP_SIZE/2);
+    if (distToCenter > zoneRadius) player.hp -= 0.1;
+
+    // Update Bots
+    bots.forEach(bot => {
+        if (!bot.alive) return;
+        bot.x += bot.vx;
+        bot.y += bot.vy;
+
+        // Simple AI: Stay in bounds/bounce
+        if (bot.x < 0 || bot.x > MAP_SIZE) bot.vx *= -1;
+        if (bot.y < 0 || bot.y > MAP_SIZE) bot.vy *= -1;
+
+        // Damage bot if in zone
+        const botDist = Math.hypot(bot.x - MAP_SIZE/2, bot.y - MAP_SIZE/2);
+        if (botDist > zoneRadius) bot.hp -= 0.2;
+
+        // Bot Shooting at Player
+        const distToPlayer = Math.hypot(player.x - bot.x, player.y - bot.y);
+        if (distToPlayer < 400 && Date.now() - bot.lastShot > 1000) {
+            shoot(bot, player.x, player.y, false);
+            bot.lastShot = Date.now();
+        }
+
+        if (bot.hp <= 0) {
+            bot.alive = false;
+            aliveCount--;
+        }
+    });
+
+    // Update Bullets
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        b.x += b.vx;
+        b.y += b.vy;
+
+        // Collision: Bullet hits Bot
+        if (b.owner === player) {
+            bots.forEach(bot => {
+                if (bot.alive && Math.hypot(b.x - bot.x, b.y - bot.y) < 20) {
+                    bot.hp -= b.damage;
+                    bullets.splice(i, 1);
+                }
+            });
+        } 
+        // Collision: Bullet hits Player
+        else if (Math.hypot(b.x - player.x, b.y - player.y) < 20) {
+            player.hp -= 5;
+            bullets.splice(i, 1);
+        }
+    }
+
+    // Chest Collision
+    chests.forEach(c => {
+        if (!c.opened && Math.hypot(player.x - c.x, player.y - c.y) < 30) {
+            c.opened = true;
+            player.damage = 30;
+            player.weapon = "Assault Rifle";
+        }
+    });
+
+    if (player.hp <= 0) {
+        gameActive = false;
+        alert("GAME OVER! You placed #" + aliveCount);
+    }
+    
+    statusText.innerText = `Players Alive: ${aliveCount}`;
+    hpText.innerText = `HP: ${Math.ceil(player.hp)}`;
+    weaponText.innerText = `Weapon: ${player.weapon}`;
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Camera translation
+    const camX = canvas.width / 2 - player.x;
+    const camY = canvas.height / 2 - player.y;
+    ctx.save();
+    ctx.translate(camX, camY);
+
+    // Draw Zone
+    ctx.strokeStyle = "red";
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.arc(MAP_SIZE/2, MAP_SIZE/2, zoneRadius, 0, Math.PI*2);
+    ctx.stroke();
+
+    // Draw Chests
+    ctx.fillStyle = "gold";
+    chests.forEach(c => {
+        if (!c.opened) ctx.fillRect(c.x-15, c.y-15, 30, 20);
+    });
+
+    // Draw Bots
+    ctx.fillStyle = "red";
+    bots.forEach(bot => {
+        if (bot.alive) ctx.fillRect(bot.x-10, bot.y-10, 20, 20);
+    });
+
+    // Draw Bullets
+    ctx.fillStyle = "yellow";
+    bullets.forEach(b => ctx.fillRect(b.x-2, b.y-2, 4, 4));
+
+    ctx.restore();
+
+    // Draw Player (Fixed at center)
+    ctx.fillStyle = player.color;
+    ctx.fillRect(canvas.width/2 - 10, canvas.height/2 - 10, 20, 20);
+
+    update();
+    requestAnimationFrame(draw);
+}
+
+draw();
+</script>
+</body>
+</html>
