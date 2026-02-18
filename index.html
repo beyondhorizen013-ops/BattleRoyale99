@@ -2,17 +2,17 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Battle Royale 99 - Alpha V2 Full</title>
+    <title>Battle Royale 99 - Alpha V2 Structural</title>
     <style>
         body { margin: 0; background: #111; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         canvas { display: none; background: #2e7d32; cursor: crosshair; }
         #menu { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #111; z-index: 100; }
-        .box { padding: 40px; border: 3px solid #00ccff; border-radius: 20px; text-align: center; background: rgba(0,0,0,0.8); }
-        h1 { font-size: 50px; color: #00ccff; margin: 10px; text-shadow: 0 0 15px #00ccff; }
-        .btn-play { padding: 15px 60px; font-size: 25px; font-weight: bold; background: #00ccff; border: none; border-radius: 50px; color: white; cursor: pointer; transition: 0.3s; }
-        .btn-play:hover { transform: scale(1.1); background: #00ffee; }
+        .box { padding: 40px; border: 3px solid #00ccff; border-radius: 20px; text-align: center; background: rgba(0,0,0,0.9); box-shadow: 0 0 20px #00ccff; }
+        h1 { font-size: 50px; color: #00ccff; margin: 10px; }
+        .btn-play { padding: 15px 60px; font-size: 25px; font-weight: bold; background: #00ccff; border: none; border-radius: 50px; color: white; cursor: pointer; }
         .btn-yt { display: inline-block; margin-top: 15px; padding: 10px 20px; background: #ff0000; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; }
-        #ui { position: absolute; top: 10px; left: 10px; display: none; pointer-events: none; }
+        #ui { position: absolute; top: 10px; left: 10px; display: none; pointer-events: none; z-index: 10; }
+        #game-over { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 200; }
     </style>
 </head>
 <body>
@@ -23,15 +23,20 @@
             <h1>BATTLE ROYALE 99</h1>
             <button class="btn-play" id="playBtn">PLAY ALPHA V2</button><br>
             <a href="https://www.youtube.com/@BeyondCheese" target="_blank" class="btn-yt">YOUTUBE</a>
-            <p style="color: #555; margin-top: 15px;">Thanks for playing!</p>
+            <p style="color: #666; margin-top: 15px;">Thanks for playing!</p>
         </div>
     </div>
 
     <div id="ui">
-        <div id="timer" style="color: #0f0; font-weight: bold;">SURGE IN: 05:00</div>
+        <div id="timer" style="color: #0f0; font-weight: bold; font-size: 20px;">SURGE IN: 05:00</div>
         <h2 id="alive">Alive: 100</h2>
-        <h3 id="hp">HP: 100</h3>
-        <div id="wep" style="color: #00ccff;">Weapon: Pistol</div>
+        <h3 id="hp" style="font-size: 24px;">HP: 100</h3>
+        <div id="wep" style="color: #00ccff; font-weight: bold;">Weapon: Pistol</div>
+    </div>
+
+    <div id="game-over">
+        <h1 style="color: red; font-size: 60px;">ELIMINATED</h1>
+        <button class="btn-play" onclick="location.reload()">RETRY</button>
     </div>
 
     <canvas id="game"></canvas>
@@ -39,12 +44,28 @@
 <script>
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
+    
     let gameActive = false, aliveCount = 100, zoneRadius = 4500, startTime;
     let player = { x: 2500, y: 2500, hp: 100, weapon: 'Pistol', lastShot: 0, power: null };
-    let bots = [], bullets = [], chests = [], snacks = [], keys = {};
+    let bots = [], bullets = [], chests = [], snacks = [], structures = [], keys = {};
 
-    // Setup 
-    for(let i=0; i<99; i++) bots.push({ x: Math.random()*5000, y: Math.random()*5000, alive: true, vx: 2, vy: 2, lastShot: 0 });
+    // 1. Generate Structures (Buildings/Walls)
+    for(let i=0; i<60; i++) {
+        structures.push({
+            x: Math.random() * 4800,
+            y: Math.random() * 4800,
+            w: 100 + Math.random() * 150,
+            h: 100 + Math.random() * 150
+        });
+    }
+
+    // 2. Generate Other Entities
+    for(let i=0; i<99; i++) {
+        bots.push({ 
+            id: i, x: Math.random()*5000, y: Math.random()*5000, 
+            hp: 100, alive: true, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5, lastShot: 0 
+        });
+    }
     for(let i=0; i<40; i++) chests.push({ x: Math.random()*5000, y: Math.random()*5000, open: false });
     for(let i=0; i<30; i++) snacks.push({ x: Math.random()*5000, y: Math.random()*5000, active: true });
 
@@ -56,58 +77,122 @@
         canvas.height = window.innerHeight;
         gameActive = true;
         startTime = Date.now();
-        loop();
+        requestAnimationFrame(loop);
     };
 
-    function shoot(u, tx, ty) {
-        if(Date.now() - u.lastShot < 400) return;
+    function shoot(u, tx, ty, isPlayer) {
+        if(Date.now() - u.lastShot < 450) return;
         let ang = Math.atan2(ty - u.y, tx - u.x);
-        bullets.push({ x: u.x, y: u.y, vx: Math.cos(ang)*15, vy: Math.sin(ang)*15, owner: u });
+        bullets.push({ 
+            x: u.x, y: u.y, vx: Math.cos(ang)*14, vy: Math.sin(ang)*14, 
+            ownerIsPlayer: isPlayer, dmg: 20 
+        });
         u.lastShot = Date.now();
+    }
+
+    function checkCollision(px, py, size) {
+        for(let s of structures) {
+            if(px + size > s.x && px - size < s.x + s.w && py + size > s.y && py - size < s.y + s.h) {
+                return true;
+            }
+        }
+        return false;
     }
 
     function loop() {
         if(!gameActive) return;
-        let elapsed = Date.now() - startTime;
-        let rem = Math.max(0, 300000 - (elapsed % 300000));
-        document.getElementById('timer').innerText = `SURGE IN: ${Math.floor(rem/60000)}:${Math.floor((rem%60000)/1000).toString().padStart(2,'0')}`;
-        
-        if(rem < 100) player.power = "One-Punch"; // Power Surge logic
 
+        // Timing & Power Logic
+        let rem = Math.max(0, 300000 - (Date.now() - startTime));
+        document.getElementById('timer').innerText = `SURGE IN: ${Math.floor(rem/60000)}:${Math.floor((rem%60000)/1000).toString().padStart(2,'0')}`;
+        if(rem < 1000) player.power = "One-Punch";
+
+        // Player Movement with Structure Collision
+        let oldX = player.x, oldY = player.y;
         if(keys['w']) player.y -= 6; if(keys['s']) player.y += 6;
         if(keys['a']) player.x -= 6; if(keys['d']) player.x += 6;
+        if(checkCollision(player.x, player.y, 10)) { player.x = oldX; player.y = oldY; }
 
+        // Zone Damage
+        zoneRadius -= 0.12;
+        if(Math.hypot(player.x-2500, player.y-2500) > zoneRadius) player.hp -= 0.2;
+
+        // Bot AI
+        bots.forEach(b => {
+            if(!b.alive) return;
+            let bxOld = b.x, byOld = b.y;
+            b.x += b.vx; b.y += b.vy;
+            if(b.x < 0 || b.x > 5000 || checkCollision(b.x, b.y, 10)) { b.vx *= -1; b.x = bxOld; }
+            if(b.y < 0 || b.y > 5000 || checkCollision(b.x, b.y, 10)) { b.vy *= -1; b.y = byOld; }
+            
+            if(Math.hypot(b.x-player.x, b.y-player.y) < 400) shoot(b, player.x, player.y, false);
+        });
+
+        // Bullets
+        for(let i = bullets.length-1; i >= 0; i--) {
+            let b = bullets[i];
+            b.x += b.vx; b.y += b.vy;
+            
+            // Structure Hit
+            if(checkCollision(b.x, b.y, 5)) { bullets.splice(i,1); continue; }
+
+            if(b.ownerIsPlayer) {
+                bots.forEach(bot => {
+                    if(bot.alive && Math.hypot(b.x-bot.x, b.y-bot.y) < 25) {
+                        bot.alive = false; aliveCount--; bullets.splice(i,1);
+                    }
+                });
+            } else {
+                if(Math.hypot(b.x-player.x, b.y-player.y) < 20) {
+                    player.hp -= 10; bullets.splice(i,1);
+                }
+            }
+        }
+
+        // Pickups
         chests.forEach(c => { if(!c.open && Math.hypot(player.x-c.x, player.y-c.y) < 40) { c.open = true; player.weapon = 'Sniper'; document.getElementById('wep').innerText = "Weapon: Sniper"; } });
         snacks.forEach(s => { if(s.active && Math.hypot(player.x-s.x, player.y-s.y) < 30) { s.active = false; player.hp = Math.min(100, player.hp + 40); } });
 
-        bots.forEach(b => { if(b.alive) { b.x += b.vx; b.y += b.vy; if(b.x<0||b.x>5000) b.vx*=-1; if(Math.hypot(b.x-player.x, b.y-player.y)<400) shoot(b, player.x, player.y); } });
-        
-        bullets.forEach((b, i) => {
-            b.x += b.vx; b.y += b.vy;
-            if(b.owner !== player && Math.hypot(b.x-player.x, b.y-player.y) < 20) { player.hp -= 10; bullets.splice(i,1); }
-            else if(b.owner === player) bots.forEach(bot => { if(bot.alive && Math.hypot(b.x-bot.x, b.y-bot.y) < 20) { bot.alive = false; aliveCount--; bullets.splice(i,1); } });
-        });
-
+        // Rendering
         ctx.clearRect(0,0,canvas.width,canvas.height);
         ctx.save(); ctx.translate(canvas.width/2-player.x, canvas.height/2-player.y);
+        
+        // Draw Map Border & Zone
+        ctx.strokeStyle = "rgba(255,0,0,0.5)"; ctx.lineWidth = 10; ctx.beginPath(); ctx.arc(2500, 2500, zoneRadius, 0, Math.PI*2); ctx.stroke();
+        
+        // Draw Structures
+        ctx.fillStyle = "#444";
+        structures.forEach(s => ctx.fillRect(s.x, s.y, s.w, s.h));
+
+        // Draw Entities
         ctx.fillStyle = "gold"; chests.forEach(c => { if(!c.open) ctx.fillRect(c.x, c.y, 30, 20); });
         ctx.fillStyle = "#0f0"; snacks.forEach(s => { if(s.active) ctx.fillRect(s.x, s.y, 15, 15); });
-        ctx.fillStyle = "red"; bots.forEach(b => { if(b.alive) ctx.fillRect(b.x, b.y, 20, 20); });
+        ctx.fillStyle = "red"; bots.forEach(b => { if(b.alive) ctx.fillRect(b.x-10, b.y-10, 20, 20); });
         ctx.fillStyle = "yellow"; bullets.forEach(bl => ctx.fillRect(bl.x, bl.y, 5, 5));
         ctx.restore();
 
+        // Player
         ctx.fillStyle = player.power ? "#f0f" : "#00ccff";
         ctx.fillRect(canvas.width/2-10, canvas.height/2-10, 20, 20);
 
+        // UI Clamping
+        player.hp = Math.max(0, player.hp);
         document.getElementById('hp').innerText = "HP: " + Math.ceil(player.hp);
         document.getElementById('alive').innerText = "Alive: " + aliveCount;
-        if(player.hp <= 0) location.reload();
-        requestAnimationFrame(loop);
+
+        if(player.hp <= 0) {
+            gameActive = false;
+            document.getElementById('game-over').style.display = 'flex';
+        } else {
+            requestAnimationFrame(loop);
+        }
     }
 
     window.onkeydown = (e) => keys[e.key.toLowerCase()] = true;
     window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
-    window.onmousedown = (e) => { if(gameActive) shoot(player, e.clientX - canvas.width/2 + player.x, e.clientY - canvas.height/2 + player.y); };
+    window.onmousedown = (e) => { 
+        if(gameActive) shoot(player, e.clientX - canvas.width/2 + player.x, e.clientY - canvas.height/2 + player.y, true); 
+    };
 </script>
 </body>
 </html>
