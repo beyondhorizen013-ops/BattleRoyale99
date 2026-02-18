@@ -7,43 +7,40 @@
         body { margin: 0; background: #111; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         canvas { display: none; margin: 0 auto; background: #2e7d32; cursor: crosshair; }
         
-        /* Main Menu Overlay */
+        /* Main Menu */
         #menu-container { 
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
             display: flex; flex-direction: column; justify-content: center; align-items: center;
-            background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1470&auto=format&fit=crop');
-            background-size: cover; background-position: center;
+            background: linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.8)), url('https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1470&auto=format&fit=crop');
+            background-size: cover; background-position: center; z-index: 20;
         }
-
+        .menu-box { background: rgba(0,0,0,0.7); padding: 50px; border-radius: 20px; border: 3px solid #00ccff; text-align: center; }
         h1 { font-size: 60px; color: #00ccff; text-shadow: 0 0 20px rgba(0,204,255,0.5); margin: 10px; }
-        
-        .menu-box { background: rgba(0,0,0,0.6); padding: 40px; border-radius: 20px; border: 2px solid #00ccff; text-align: center; }
-
         .btn-play { 
-            padding: 20px 60px; font-size: 28px; font-weight: bold; color: white; 
+            padding: 20px 80px; font-size: 32px; font-weight: bold; color: white; 
             background: #00ccff; border: none; border-radius: 50px; cursor: pointer;
             transition: 0.3s; animation: pulse 2s infinite; margin-bottom: 20px;
         }
-        
         .btn-yt { 
-            display: inline-block; padding: 12px 30px; font-size: 18px; color: white; 
+            display: inline-block; padding: 12px 35px; font-size: 18px; color: white; 
             background: #ff0000; border: none; border-radius: 5px; cursor: pointer;
             text-decoration: none; font-weight: bold; transition: 0.3s;
         }
-
-        .btn-play:hover { transform: scale(1.1); background: #00ffee; box-shadow: 0 0 30px #00ccff; }
+        .btn-play:hover { transform: scale(1.1); background: #00ffee; }
         .btn-yt:hover { background: #cc0000; box-shadow: 0 0 20px #ff0000; }
-
         .thanks-msg { margin-top: 25px; font-style: italic; color: #aaa; font-size: 18px; }
 
         @keyframes pulse {
             0% { box-shadow: 0 0 0 0 rgba(0, 204, 255, 0.7); }
-            70% { box-shadow: 0 0 0 20px rgba(0, 204, 255, 0); }
+            70% { box-shadow: 0 0 0 25px rgba(0, 204, 255, 0); }
             100% { box-shadow: 0 0 0 0 rgba(0, 204, 255, 0); }
         }
 
         /* In-Game UI */
-        #ui { position: absolute; top: 10px; left: 10px; display: none; pointer-events: none; }
+        #ui { position: absolute; top: 10px; left: 10px; display: none; pointer-events: none; text-shadow: 2px 2px 4px #000; }
+        #timer-box { font-size: 22px; color: #00ff00; font-weight: bold; }
+        #power-announcement { position: absolute; top: 25%; left: 50%; transform: translate(-50%, -50%); font-size: 40px; font-weight: bold; color: #ff00ff; opacity: 0; transition: 0.8s; pointer-events: none; }
+        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 30; }
     </style>
 </head>
 <body>
@@ -53,36 +50,57 @@
             <div style="letter-spacing: 5px; font-size: 12px;">BEYOND CHEESE PRESENTS</div>
             <h1>BATTLE ROYALE 99</h1>
             <div style="color: #ff00ff; margin-bottom: 30px; font-weight: bold;">ALPHA V2: SUPERPOWER UPDATE</div>
-            
-            <button class="btn-play" onclick="startGame()">PLAY</button>
-            <br>
+            <button class="btn-play" onclick="startGame()">PLAY</button><br>
             <a href="https://www.youtube.com/@BeyondCheese" target="_blank" class="btn-yt">SUBSCRIBE ON YOUTUBE</a>
-            
             <div class="thanks-msg">Thanks for playing!</div>
         </div>
     </div>
 
     <div id="ui">
-        <div id="timer-box" style="font-size: 20px; color: #00ff00;">Next Surge: 05:00</div>
+        <div id="timer-box">NEXT SURGE: 05:00</div>
         <h2 id="status">Alive: 100</h2>
         <div id="hp-text" style="font-size: 20px;">HP: 100</div>
         <div id="wep-text" style="color: #00ccff;">Weapon: Pistol</div>
+        <div id="active-power" style="color: #ff00ff; font-weight: bold;"></div>
+    </div>
+
+    <div id="power-announcement">POWER SURGE!</div>
+
+    <div id="overlay">
+        <h1 id="end-title">VICTORY ROYALE!</h1>
+        <button class="btn-play" style="animation:none;" onclick="location.reload()">BACK TO MENU</button>
     </div>
 
     <canvas id="game"></canvas>
 
 <script>
-    // Link the Play button to the game logic
-    function startGame() {
-        document.getElementById('menu-container').style.display = 'none';
-        document.getElementById('ui').style.display = 'block';
-        const canvas = document.getElementById('game');
-        canvas.style.display = 'block';
-        
-        // Start your Alpha V2 Game Engine here
-        console.log("Game Started! Dropping 99 Bots...");
-        // (Insert the full update logic from our previous step here)
-    }
-</script>
-</body>
-</html>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// Game State
+const MAP_SIZE = 5000;
+let aliveCount = 100;
+let zoneRadius = 4500;
+let gameActive = false;
+let startTime;
+const SURGE_INTERVAL = 5 * 60 * 1000; 
+
+const weapons = {
+    'Pistol': { damage: 15, fireRate: 450, color: '#ffffff' },
+    'Assault Rifle': { damage: 25, fireRate: 200, color: '#32cd32' },
+    'Shotgun': { damage: 70, fireRate: 900, color: '#9370db' },
+    'Sniper': { damage: 120, fireRate: 1600, color: '#ffa500' }
+};
+
+const player = { id: 'player', name: 'You', x: MAP_SIZE/2, y: MAP_SIZE/2, hp: 100, speed: 6, weapon: 'Pistol', lastShot: 0, power: null, lastHulk: 0 };
+const bots = [];
+const bullets = [];
+const walls = [];
+const chests = [];
+const snacks = [];
+const keys = {};
+
+// Initialization
+for (let i = 0; i < 80; i++) walls.push({ x: Math.random()*MAP_SIZE, y: Math.random()*MAP_SIZE, w: 100
